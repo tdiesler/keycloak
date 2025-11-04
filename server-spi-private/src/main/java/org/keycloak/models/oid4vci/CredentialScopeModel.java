@@ -41,8 +41,10 @@ import static org.keycloak.constants.Oid4VciConstants.OID4VC_PROTOCOL;
  */
 public class CredentialScopeModel implements ClientScopeModel {
 
-
-    public static final String SD_JWT_VISIBLE_CLAIMS_DEFAULT = "id,iat,nbf,exp,jti";
+    // Also see DisclosureRedList#redList
+    // https://www.ietf.org/archive/id/draft-ietf-oauth-sd-jwt-vc-11.html#section-3.2.2.2
+    public static final String SD_JWT_VISIBLE_CLAIMS_DEFAULT = "iss,nbf,exp,cnf,vct,status";
+    
     public static final int SD_JWT_DECOYS_DEFAULT = 10;
     public static final String FORMAT_DEFAULT = "dc+sd-jwt";
     public static final String HASH_ALGORITHM_DEFAULT = "SHA-256";
@@ -294,8 +296,7 @@ public class CredentialScopeModel implements ClientScopeModel {
     }
 
     public void setSdJwtVisibleClaims(List<String> sdJwtVisibleClaims) {
-        clientScope.setAttribute(SD_JWT_VISIBLE_CLAIMS,
-                                 String.join(",", sdJwtVisibleClaims));
+        clientScope.setAttribute(SD_JWT_VISIBLE_CLAIMS, String.join(",", sdJwtVisibleClaims));
     }
 
     public String getVcDisplay() {
