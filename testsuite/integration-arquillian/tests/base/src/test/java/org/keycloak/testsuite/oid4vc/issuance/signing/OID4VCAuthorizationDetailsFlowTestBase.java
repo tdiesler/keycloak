@@ -17,6 +17,7 @@
 
 package org.keycloak.testsuite.oid4vc.issuance.signing;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import jakarta.ws.rs.core.HttpHeaders;
 import org.apache.commons.io.IOUtils;
 import org.apache.http.HttpStatus;
@@ -25,24 +26,23 @@ import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
 import org.apache.http.message.BasicNameValuePair;
 import org.junit.Test;
 import org.keycloak.OAuth2Constants;
+import org.keycloak.models.oid4vci.CredentialScopeModel;
+import org.keycloak.protocol.oid4vc.issuance.OID4VCAuthorizationDetailsResponse;
 import org.keycloak.protocol.oid4vc.model.AuthorizationDetail;
 import org.keycloak.protocol.oid4vc.model.ClaimsDescription;
 import org.keycloak.protocol.oid4vc.model.CredentialIssuer;
 import org.keycloak.protocol.oid4vc.model.CredentialOfferURI;
-import org.keycloak.protocol.oid4vc.model.CredentialsOffer;
 import org.keycloak.protocol.oid4vc.model.CredentialRequest;
 import org.keycloak.protocol.oid4vc.model.CredentialResponse;
-import org.keycloak.protocol.oid4vc.issuance.OID4VCAuthorizationDetailsResponse;
+import org.keycloak.protocol.oid4vc.model.CredentialsOffer;
 import org.keycloak.protocol.oidc.grants.PreAuthorizedCodeGrantTypeFactory;
 import org.keycloak.protocol.oidc.representations.OIDCConfigurationRepresentation;
-import org.keycloak.util.JsonSerialization;
-import com.fasterxml.jackson.core.type.TypeReference;
-import org.keycloak.models.oid4vci.CredentialScopeModel;
-import org.apache.http.entity.StringEntity;
 import org.keycloak.representations.idm.ClientScopeRepresentation;
+import org.keycloak.util.JsonSerialization;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -55,9 +55,9 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 import static org.keycloak.protocol.oid4vc.issuance.OID4VCAuthorizationDetailsProcessor.OPENID_CREDENTIAL_TYPE;
 
@@ -118,7 +118,7 @@ public abstract class OID4VCAuthorizationDetailsFlowTestBase extends OID4VCIssue
             ctx.credentialsOffer = JsonSerialization.readValue(s, CredentialsOffer.class);
         }
 
-        HttpGet getIssuerMetadata = new HttpGet(ctx.credentialsOffer.getCredentialIssuer() + "/.well-known/openid-credential-issuer");
+        HttpGet getIssuerMetadata = new HttpGet(ctx.credentialsOffer.getIssuerMetadataUrl());
         try (CloseableHttpResponse response = httpClient.execute(getIssuerMetadata)) {
             assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
             String s = IOUtils.toString(response.getEntity().getContent(), StandardCharsets.UTF_8);
