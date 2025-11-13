@@ -38,6 +38,7 @@ import java.util.Set;
 public class PassThroughClientAuthenticator extends AbstractClientAuthenticator {
 
     public static final String PROVIDER_ID = "testsuite-client-passthrough";
+    public static String svcClientId = "test-service";
     public static String clientId = "test-app";
 
     // If this parameter is present in the HTTP request, the error will be thrown during authentication
@@ -59,7 +60,6 @@ public class PassThroughClientAuthenticator extends AbstractClientAuthenticator 
         property.setType(ProviderConfigProperty.BOOLEAN_TYPE);
         property.setHelpText("Bar Property of this authenticator, which does nothing");
         clientConfigProperties.add(property);
-
     }
 
     @Override

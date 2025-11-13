@@ -207,6 +207,13 @@
       "secret": "password"
     },
     {
+      "clientId": "test-service",
+      "name": "OID4VCI Service Account",
+      "enabled": true,
+      "serviceAccountsEnabled": true,
+      "secret": "secret"
+    },
+    {
       "clientId": "root-url-client",
       "enabled": true,
       "rootUrl": "http://localhost:8180/foo/bar",

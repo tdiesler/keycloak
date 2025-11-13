@@ -119,6 +119,7 @@ import static org.keycloak.jose.jwe.JWEConstants.RSA_OAEP_256;
 import static org.keycloak.protocol.oid4vc.issuance.OID4VCIssuerEndpoint.CREDENTIAL_OFFER_URI_CODE_SCOPE;
 import static org.keycloak.protocol.oid4vc.model.ProofType.JWT;
 import static org.keycloak.testsuite.forms.PassThroughClientAuthenticator.clientId;
+import static org.keycloak.testsuite.forms.PassThroughClientAuthenticator.svcClientId;
 
 /**
  * Moved test to subclass. so we can reuse initialization code.
@@ -136,6 +137,7 @@ public abstract class OID4VCIssuerEndpointTest extends OID4VCTest {
     protected static ClientScopeRepresentation minimalJwtTypeCredentialClientScope;
 
     protected CloseableHttpClient httpClient;
+    protected ClientRepresentation svcClient;
     protected ClientRepresentation client;
 
     protected boolean shouldEnableOid4vci() {
@@ -196,6 +198,7 @@ public abstract class OID4VCIssuerEndpointTest extends OID4VCTest {
     public void setup() {
         CryptoIntegration.init(this.getClass().getClassLoader());
         httpClient = HttpClientBuilder.create().build();
+        svcClient = testRealm().clients().findByClientId(svcClientId).get(0);
         client = testRealm().clients().findByClientId(clientId).get(0);
 
         // Lookup the pre-installed oid4vc_natural_person client scope
@@ -225,11 +228,16 @@ public abstract class OID4VCIssuerEndpointTest extends OID4VCTest {
                 null);
 
         // Assign the registered optional client scopes to the client
+        assignOptionalClientScopeToClient(sdJwtTypeCredentialClientScope.getId(), svcClient.getClientId());
+        assignOptionalClientScopeToClient(jwtTypeCredentialClientScope.getId(), svcClient.getClientId());
+        assignOptionalClientScopeToClient(minimalJwtTypeCredentialClientScope.getId(), svcClient.getClientId());
+
         assignOptionalClientScopeToClient(sdJwtTypeCredentialClientScope.getId(), client.getClientId());
         assignOptionalClientScopeToClient(jwtTypeCredentialClientScope.getId(), client.getClientId());
         assignOptionalClientScopeToClient(minimalJwtTypeCredentialClientScope.getId(), client.getClientId());
 
         // Enable OID4VCI for the client by default, but allow tests to override
+        setClientOid4vciEnabled(svcClientId, shouldEnableOid4vci());
         setClientOid4vciEnabled(clientId, shouldEnableOid4vci());
     }
 

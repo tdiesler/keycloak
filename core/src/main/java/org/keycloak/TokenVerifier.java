@@ -106,12 +106,12 @@ public class TokenVerifier<T extends JsonWebToken> {
 
         @Override
         public boolean test(JsonWebToken t) throws VerificationException {
-            if (this.realmUrl == null) {
+            if (realmUrl == null) {
                 throw new VerificationException("Realm URL not set");
             }
 
-            if (! this.realmUrl.equals(t.getIssuer())) {
-                throw new VerificationException("Invalid token issuer. Expected '" + this.realmUrl + "'");
+            if (!realmUrl.equals(t.getIssuer())) {
+                throw new VerificationException("Invalid token issuer [exp=" + realmUrl + ", was=" + t.getIssuer() +"]");
             }
 
             return true;

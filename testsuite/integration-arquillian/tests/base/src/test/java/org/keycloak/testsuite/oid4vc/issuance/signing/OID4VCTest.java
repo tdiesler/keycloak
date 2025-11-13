@@ -75,6 +75,7 @@ import org.keycloak.testsuite.AbstractTestRealmKeycloakTest;
 import org.keycloak.testsuite.arquillian.annotation.EnableFeature;
 import org.keycloak.testsuite.util.AdminClientUtil;
 import org.keycloak.testsuite.util.UserBuilder;
+import org.keycloak.testsuite.util.oauth.AccessTokenResponse;
 import org.keycloak.testsuite.util.oauth.AuthorizationEndpointResponse;
 import org.keycloak.testsuite.util.oauth.OAuthClient;
 import org.keycloak.util.JsonSerialization;
@@ -430,15 +431,20 @@ public abstract class OID4VCTest extends AbstractTestRealmKeycloakTest {
 	}
 
 	protected String getBearerToken(OAuthClient oAuthClient, ClientRepresentation client, String credentialScopeName) {
-		if (client != null) {
-			oAuthClient.client(client.getClientId(), client.getSecret());
-		}
+        oAuthClient.client(client.getClientId(), client.getSecret());
 		if (credentialScopeName != null) {
 			oAuthClient.scope(credentialScopeName);
 		}
-		AuthorizationEndpointResponse authorizationEndpointResponse = oAuthClient.doLogin("john",
-				"password");
-		return oAuthClient.doAccessTokenRequest(authorizationEndpointResponse.getCode()).getAccessToken();
+        String accessToken;
+        if (client.isServiceAccountsEnabled()) {
+            var tokenResponse = oAuthClient.doClientCredentialsGrantAccessTokenRequest();
+            accessToken = tokenResponse.getAccessToken();
+        } else {
+            var authResponse = oAuthClient.doLogin("john","password");
+            accessToken = oAuthClient.doAccessTokenRequest(authResponse.getCode()).getAccessToken();
+        }
+        Assert.assertNotNull(accessToken);
+        return accessToken;
 	}
 
 	public static class StaticTimeProvider implements TimeProvider {

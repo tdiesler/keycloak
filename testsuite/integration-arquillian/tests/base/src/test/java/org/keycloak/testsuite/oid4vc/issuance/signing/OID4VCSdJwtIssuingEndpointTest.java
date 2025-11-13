@@ -297,13 +297,14 @@ public class OID4VCSdJwtIssuingEndpointTest extends OID4VCIssuerEndpointTest {
     public void testCredentialIssuance() throws Exception {
 
         ClientScopeRepresentation clientScope = sdJwtTypeCredentialClientScope;
-        String token = getBearerToken(oauth, client, clientScope.getName());
+        String token = getBearerToken(oauth, svcClient, clientScope.getName());
 
         // 1. Retrieving the credential-offer-uri
         final String credentialConfigurationId = clientScope.getAttributes().get(CredentialScopeModel.CONFIGURATION_ID);
-        HttpGet getCredentialOfferURI = new HttpGet(getBasePath(TEST_REALM_NAME) +
-                "credential-offer-uri?credential_configuration_id=" +
-                credentialConfigurationId);
+        HttpGet getCredentialOfferURI = new HttpGet(getBasePath(TEST_REALM_NAME) + String.format("credential-offer-uri?" +
+                        "credential_configuration_id=%s" +
+                        "&pre_authorized=%s" +
+                        "&subject_id=%s", credentialConfigurationId, true, client.getId()));
         getCredentialOfferURI.addHeader(HttpHeaders.AUTHORIZATION, "Bearer " + token);
         CloseableHttpResponse credentialOfferURIResponse = httpClient.execute(getCredentialOfferURI);
 

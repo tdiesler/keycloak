@@ -111,18 +111,18 @@ public class OAuth2CodeParser {
             return result.illegalCode();
         }
 
-        result.codeData = OAuth2Code.deserializeCode(codeData);
+        OAuth2Code oauth2Code = OAuth2Code.deserializeCode(codeData);
+        result.codeData = oauth2Code;
 
-        String persistedUserSessionId = result.codeData.getUserSessionId();
+        String persistedUserSessionId = oauth2Code.getUserSessionId();
 
         if (!userSessionId.equals(persistedUserSessionId)) {
             logger.warnf("Code '%s' is bound to a different session", codeUUID);
             return result.illegalCode();
         }
 
-        // Finally doublecheck if code is not expired
-        int currentTime = Time.currentTime();
-        if (currentTime > result.codeData.getExpiration()) {
+        // Finally double check if code is not expired
+        if (oauth2Code.isExpired()) {
             return result.expiredCode();
         }
 
@@ -130,7 +130,6 @@ public class OAuth2CodeParser {
 
         return result;
     }
-
 
     public static class ParseResult {
 
