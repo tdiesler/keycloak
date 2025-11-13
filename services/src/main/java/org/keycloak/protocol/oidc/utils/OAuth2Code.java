@@ -59,6 +59,18 @@ public class OAuth2Code {
     private final String userSessionId;
 
 
+    public OAuth2Code(String id, int expiration, String nonce, String scope, String userSessionId) {
+        this.id = id;
+        this.expiration = expiration;
+        this.nonce = nonce;
+        this.scope = scope;
+        this.redirectUriParam = null;
+        this.codeChallenge = null;
+        this.codeChallengeMethod = null;
+        this.dpopJkt = null;
+        this.userSessionId = userSessionId;
+    }
+
     public OAuth2Code(String id, int expiration, String nonce, String scope, String redirectUriParam,
                       String codeChallenge, String codeChallengeMethod, String dpopJkt, String userSessionId) {
         this.id = id;

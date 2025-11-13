@@ -71,6 +71,7 @@ import org.keycloak.protocol.oid4vc.model.SupportedCredentialConfiguration;
 import org.keycloak.protocol.oid4vc.model.VerifiableCredential;
 import org.keycloak.protocol.oidc.utils.OAuth2Code;
 import org.keycloak.protocol.oidc.utils.OAuth2CodeParser;
+import org.keycloak.protocol.oidc.utils.OAuth2CodeParser.OAuth2CodeEntry;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.ClientScopeRepresentation;
@@ -142,27 +143,22 @@ public abstract class OID4VCIssuerEndpointTest extends OID4VCTest {
         return true;
     }
 
-    protected static String prepareSessionCode(KeycloakSession session, AppAuthManager.BearerTokenAuthenticator authenticator, String note) {
+    protected static OAuth2CodeEntry prepareSessionCode(KeycloakSession session, AppAuthManager.BearerTokenAuthenticator authenticator, String note) {
         AuthenticationManager.AuthResult authResult = authenticator.authenticate();
         UserSessionModel userSessionModel = authResult.session();
         AuthenticatedClientSessionModel authenticatedClientSessionModel = userSessionModel.getAuthenticatedClientSessionByClient(
                 authResult.client().getId());
-        String codeId = SecretGenerator.getInstance().randomString();
-        String nonce = SecretGenerator.getInstance().randomString();
-        OAuth2Code oAuth2Code = new OAuth2Code(codeId,
+        OAuth2Code oauth2Code = new OAuth2Code(
+                SecretGenerator.getInstance().randomString(),
                 Time.currentTime() + 6000,
-                nonce,
+                SecretGenerator.getInstance().randomString(),
                 CREDENTIAL_OFFER_URI_CODE_SCOPE,
-                null,
-                null,
-                null,
-                null,
                 authenticatedClientSessionModel.getUserSession().getId());
 
-        String oauthCode = OAuth2CodeParser.persistCode(session, authenticatedClientSessionModel, oAuth2Code);
-
-        authenticatedClientSessionModel.setNote(oauthCode, note);
-        return oauthCode;
+        var nonce = OAuth2CodeParser.persistCode(session, authenticatedClientSessionModel, oauth2Code);
+        var codeEntry = new OAuth2CodeEntry(nonce, oauth2Code);
+        authenticatedClientSessionModel.setNote(nonce, note);
+        return codeEntry;
     }
 
     protected static OID4VCIssuerEndpoint prepareIssuerEndpoint(KeycloakSession session,

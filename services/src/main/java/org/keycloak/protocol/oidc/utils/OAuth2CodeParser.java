@@ -39,6 +39,7 @@ public class OAuth2CodeParser {
 
     private static final Pattern DOT = Pattern.compile("\\.");
 
+    public record OAuth2CodeEntry(String key, OAuth2Code code) {}
 
     /**
      * Will persist the code to the cache and return the object with the codeData and code correctly set

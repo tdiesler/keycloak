@@ -39,6 +39,8 @@ import org.keycloak.constants.Oid4VciConstants;
 import org.keycloak.models.oid4vci.CredentialScopeModel;
 import org.keycloak.protocol.oid4vc.issuance.OID4VCIssuerEndpoint;
 import org.keycloak.protocol.oid4vc.issuance.OID4VCIssuerWellKnownProvider;
+import org.keycloak.protocol.oid4vc.issuance.credentialoffer.CredentialOfferStorage;
+import org.keycloak.protocol.oid4vc.issuance.credentialoffer.CredentialOfferStorage.OfferEntry;
 import org.keycloak.protocol.oid4vc.model.Claim;
 import org.keycloak.protocol.oid4vc.model.ClaimDisplay;
 import org.keycloak.protocol.oid4vc.model.Claims;
@@ -59,6 +61,7 @@ import org.keycloak.protocol.oid4vc.model.SupportedCredentialConfiguration;
 import org.keycloak.protocol.oid4vc.model.VerifiableCredential;
 import org.keycloak.protocol.oidc.grants.PreAuthorizedCodeGrantTypeFactory;
 import org.keycloak.protocol.oidc.representations.OIDCConfigurationRepresentation;
+import org.keycloak.protocol.oidc.utils.OAuth2CodeParser;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.services.CorsErrorResponseException;
@@ -222,9 +225,9 @@ public class OID4VCJWTIssuerEndpointTest extends OID4VCIssuerEndpointTest {
                     .run((session -> {
                         AppAuthManager.BearerTokenAuthenticator authenticator = new AppAuthManager.BearerTokenAuthenticator(session);
                         authenticator.setTokenString(token);
-                        String sessionCode = prepareSessionCode(session, authenticator, "invalidNote");
+                        String nonce = prepareSessionCode(session, authenticator, "invalidNote").key();
                         OID4VCIssuerEndpoint issuerEndpoint = prepareIssuerEndpoint(session, authenticator);
-                        issuerEndpoint.getCredentialOffer(sessionCode);
+                        issuerEndpoint.getCredentialOffer(nonce);
                     }));
         });
     }
@@ -237,23 +240,26 @@ public class OID4VCJWTIssuerEndpointTest extends OID4VCIssuerEndpointTest {
                 .run((session) -> {
                     AppAuthManager.BearerTokenAuthenticator authenticator = new AppAuthManager.BearerTokenAuthenticator(session);
                     authenticator.setTokenString(token);
-                    CredentialsOffer credentialsOffer = new CredentialsOffer()
+                    CredentialsOffer credOffer = new CredentialsOffer()
                             .setCredentialIssuer("the-issuer")
                             .setGrants(new PreAuthorizedGrant().setPreAuthorizedCode(new PreAuthorizedCode().setPreAuthorizedCode("the-code")))
                             .setCredentialConfigurationIds(List.of("credential-configuration-id"));
 
-                    String sessionCode = prepareSessionCode(session, authenticator, JsonSerialization.writeValueAsString(credentialsOffer));
+                    var offerStorage = session.getProvider(CredentialOfferStorage.class);
+                    var codeEntry = prepareSessionCode(session, authenticator, JsonSerialization.writeValueAsString(credOffer));
+                    offerStorage.putOfferEntry(new OfferEntry(codeEntry.key(), codeEntry.code(), credOffer));
+
                     // The cache transactions need to be committed explicitly in the test. Without that, the OAuth2Code will only be committed to
                     // the cache after .run((session)-> ...)
                     session.getTransactionManager().commit();
                     OID4VCIssuerEndpoint issuerEndpoint = prepareIssuerEndpoint(session, authenticator);
-                    Response credentialOfferResponse = issuerEndpoint.getCredentialOffer(sessionCode);
+                    Response credentialOfferResponse = issuerEndpoint.getCredentialOffer(codeEntry.key());
                     assertEquals("The offer should have been returned.", HttpStatus.SC_OK, credentialOfferResponse.getStatus());
                     Object credentialOfferEntity = credentialOfferResponse.getEntity();
                     assertNotNull("An actual offer should be in the response.", credentialOfferEntity);
 
                     CredentialsOffer retrievedCredentialsOffer = JsonSerialization.mapper.convertValue(credentialOfferEntity, CredentialsOffer.class);
-                    assertEquals("The offer should be the one prepared with for the session.", credentialsOffer, retrievedCredentialsOffer);
+                    assertEquals("The offer should be the one prepared with for the session.", credOffer, retrievedCredentialsOffer);
                 });
     }
 
