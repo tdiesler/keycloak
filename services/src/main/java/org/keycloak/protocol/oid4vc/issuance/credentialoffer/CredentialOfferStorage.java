@@ -28,7 +28,7 @@ public interface CredentialOfferStorage extends Provider {
         }
     }
 
-    void putOfferEntry(OfferEntry entry);
+    OfferEntry addOfferEntry(OfferEntry entry);
 
     OfferEntry findOfferEntryByNonce(String nonce, boolean remove);
 

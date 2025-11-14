@@ -61,7 +61,6 @@ import org.keycloak.protocol.oid4vc.model.SupportedCredentialConfiguration;
 import org.keycloak.protocol.oid4vc.model.VerifiableCredential;
 import org.keycloak.protocol.oidc.grants.PreAuthorizedCodeGrantTypeFactory;
 import org.keycloak.protocol.oidc.representations.OIDCConfigurationRepresentation;
-import org.keycloak.protocol.oidc.utils.OAuth2CodeParser;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.sdjwt.vp.SdJwtVP;
 import org.keycloak.services.CorsErrorResponseException;
@@ -247,7 +246,7 @@ public class OID4VCJWTIssuerEndpointTest extends OID4VCIssuerEndpointTest {
 
                     var offerStorage = session.getProvider(CredentialOfferStorage.class);
                     var codeEntry = prepareSessionCode(session, authenticator, JsonSerialization.writeValueAsString(credOffer));
-                    offerStorage.putOfferEntry(new OfferEntry(codeEntry.key(), codeEntry.code(), credOffer));
+                    offerStorage.addOfferEntry(new OfferEntry(codeEntry.key(), codeEntry.code(), credOffer));
 
                     // The cache transactions need to be committed explicitly in the test. Without that, the OAuth2Code will only be committed to
                     // the cache after .run((session)-> ...)

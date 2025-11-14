@@ -323,7 +323,7 @@ public class OID4VCIssuerEndpoint {
      * Creates a Credential Offer Uri that is not bound to a specific subject id.
      */
     public Response getCredentialOfferURI(String vcId, OfferUriType type, int width, int height) {
-        return getCredentialOfferURI(vcId, false, null, type, width, height);
+        return getCredentialOfferURI(vcId, true, null, null, type, width, height);
     }
 
     /**
@@ -346,6 +346,7 @@ public class OID4VCIssuerEndpoint {
     public Response getCredentialOfferURI(
             @QueryParam("credential_configuration_id") String vcId,
             @QueryParam("pre_authorized") @DefaultValue("true") boolean preAuthorized,
+            @QueryParam("target_client") String targetClient,
             @QueryParam("target_user") String targetUser,
             @QueryParam("type") @DefaultValue("uri") OfferUriType type,
             @QueryParam("width") @DefaultValue("200") int width,
@@ -359,6 +360,16 @@ public class OID4VCIssuerEndpoint {
 
         cors.allowedOrigins(session, clientModel);
         checkClientEnabled();
+
+        if (targetClient == null) {
+            targetClient = clientId;
+            LOGGER.warnf("Using derived credential offer target client: %s", targetClient);
+        }
+        if (targetUser == null) {
+            UserSessionModel userSession = clientSession.getUserSession();
+            targetUser = userSession.getUser().getUsername();
+            LOGGER.warnf("Using derived credential offer target user: %s", targetUser);
+        }
 
         Map<String, SupportedCredentialConfiguration> credentialsMap = OID4VCIssuerWellKnownProvider.getSupportedCredentials(session);
         LOGGER.debugf("Get an offer for %s", vcId);
@@ -375,23 +386,23 @@ public class OID4VCIssuerEndpoint {
 
         // calculate the expiration of the preAuthorizedCode. The nonce will also expire at that time.
         int expiration = timeProvider.currentTimeSeconds() + preAuthorizedCodeLifeSpan;
-        String preAuthorizedCode = PreAuthorizedCodeGrantType.getPreAuthorizedCode(session, clientSession, expiration);
+        OAuth2Code oauth2Code = generateCodeForTargetUser(targetClient, targetUser, expiration);
+        String nonce = oauth2Code.getId() + "." + oauth2Code.getNonce();
 
         CredentialsOffer credOffer = new CredentialsOffer()
                 .setCredentialIssuer(OID4VCIssuerWellKnownProvider.getIssuer(session.getContext()))
                 .setCredentialConfigurationIds(List.of(supportedCredentialConfiguration.getId()));
 
         if (preAuthorized) {
+            var preAuthorizedCode = PreAuthorizedCodeGrantType.getPreAuthorizedCode(targetClient, targetUser, expiration);
             credOffer.setGrants(new PreAuthorizedGrant().setPreAuthorizedCode(
                     new PreAuthorizedCode().setPreAuthorizedCode(preAuthorizedCode)));
         }
 
-        var oauth2Code = generateCodeForSession(expiration, clientSession);
-        var nonce = OAuth2CodeParser.persistCode(session, clientSession, oauth2Code);
-
         var offerStorage = session.getProvider(CredentialOfferStorage.class);
-        offerStorage.putOfferEntry(new CredentialOfferStorage.OfferEntry(nonce, oauth2Code, credOffer));
-        LOGGER.debugf("Stored credential offer entry: [type=%s, cid=%s, sub=%s, nonce=%s]", vcId, clientId, targetUser, nonce);
+        var offerEntry = offerStorage.addOfferEntry(new CredentialOfferStorage.OfferEntry(nonce, oauth2Code, credOffer));
+        LOGGER.debugf("Stored credential offer entry: [type=%s, cid=%s, sub=%s, nonce=%s]",
+                offerEntry.offer().getCredentialConfigurationIds(), offerEntry.getClientId(), offerEntry.getSubjectId(), nonce);
 
         // Store the credential configuration IDs in a predictable location for token processing
         // This allows the authorization details processor to easily retrieve the configuration IDs
@@ -469,18 +480,26 @@ public class OID4VCIssuerEndpoint {
 
         RealmModel realm = session.getContext().getRealm();
         EventBuilder eventBuilder = new EventBuilder(realm, session, session.getContext().getConnection());
-        OAuth2CodeParser.ParseResult result = OAuth2CodeParser.parseCode(session, nonce, realm, eventBuilder);
-
-        OAuth2Code oauth2Code = result.getCodeData();
-        if (result.isExpiredCode() || result.isIllegalCode() || !oauth2Code.getScope().equals(CREDENTIAL_OFFER_URI_CODE_SCOPE)) {
-            throw new BadRequestException(getErrorResponse(ErrorType.INVALID_TOKEN));
-        }
 
         var offerStorage = session.getProvider(CredentialOfferStorage.class);
-        var offerEntry =  offerStorage.findOfferEntryByNonce(nonce, true);
+        var offerEntry = offerStorage.findOfferEntryByNonce(nonce, false);
         if (offerEntry == null) {
             var errorMessage = "No offer entry for nonce: " + nonce;
             eventBuilder.event(INTROSPECT_TOKEN_ERROR).detail(Details.REASON, errorMessage).error(Errors.INVALID_REQUEST);
+            throw new BadRequestException(getErrorResponse(ErrorType.INVALID_TOKEN));
+        }
+        LOGGER.debugf("Found credential offer entry: [type=%s, cid=%s, sub=%s, nonce=%s]",
+                offerEntry.offer().getCredentialConfigurationIds(), offerEntry.getClientId(), offerEntry.getSubjectId(), nonce);
+
+        var oauth2Code = offerEntry.code();
+        if (oauth2Code.isExpired()) {
+            eventBuilder.event(INTROSPECT_TOKEN_ERROR).error(Errors.EXPIRED_CODE);
+            throw new BadRequestException(getErrorResponse(ErrorType.INVALID_TOKEN));
+        }
+
+        if (!oauth2Code.getScope().equals(CREDENTIAL_OFFER_URI_CODE_SCOPE)) {
+            var errorMessage = String.format("Invalid token scope: %s", oauth2Code.getScope());
+            eventBuilder.event(INTROSPECT_TOKEN_ERROR).detail(Details.REASON, errorMessage).error(Errors.INVALID_TOKEN);
             throw new BadRequestException(getErrorResponse(ErrorType.INVALID_TOKEN));
         }
 
@@ -610,7 +629,10 @@ public class OID4VCIssuerEndpoint {
 
             // First try to get the client session and look for the mapping there
             UserSessionModel userSession = authResult.session();
-            AuthenticatedClientSessionModel clientSession = userSession.getAuthenticatedClientSessionByClient(authResult.client().getId());
+            String userId = userSession.getUser().getUsername();
+            ClientModel clientModel = authResult.client();
+            String clientId = clientModel.getClientId();
+            AuthenticatedClientSessionModel clientSession = userSession.getAuthenticatedClientSessionByClient(clientModel.getId());
             String mappedCredentialConfigurationId = null;
 
             if (clientSession != null) {
@@ -1205,6 +1227,13 @@ public class OID4VCIssuerEndpoint {
         String codeId = SecretGenerator.getInstance().randomString();
         String nonce = SecretGenerator.getInstance().randomString();
         String userSessionId = clientSession.getUserSession().getId();
+        return new OAuth2Code(codeId, expiration, nonce, CREDENTIAL_OFFER_URI_CODE_SCOPE, userSessionId);
+    }
+
+    private OAuth2Code generateCodeForTargetUser(String targetClient, String targetUser, int expiration) {
+        String codeId = SecretGenerator.getInstance().randomString();
+        String nonce = SecretGenerator.getInstance().randomString();
+        String userSessionId = targetClient + "." + targetUser;
         return new OAuth2Code(codeId, expiration, nonce, CREDENTIAL_OFFER_URI_CODE_SCOPE, userSessionId);
     }
 

@@ -310,7 +310,7 @@ public abstract class OAuth2GrantTypeBase implements OAuth2GrantType {
      */
     protected List<AuthorizationDetailsResponse> handleMissingAuthorizationDetails(UserSessionModel userSession, ClientSessionContext clientSessionCtx) {
         try {
-            return session.getKeycloakSessionFactory()
+            var result = session.getKeycloakSessionFactory()
                     .getProviderFactoriesStream(AuthorizationDetailsProcessor.class)
                     .sorted((f1, f2) -> f2.order() - f1.order())
                     .map(f -> session.getProvider(AuthorizationDetailsProcessor.class, f.getId()))
@@ -318,6 +318,7 @@ public abstract class OAuth2GrantTypeBase implements OAuth2GrantType {
                     .filter(authzDetailsResponse -> authzDetailsResponse != null)
                     .findFirst()
                     .orElse(null);
+            return result;
         } catch (RuntimeException e) {
             logger.warnf(e, "Error when handling missing authorization_details");
             return null;

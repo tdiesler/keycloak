@@ -436,8 +436,7 @@ public abstract class OID4VCTest extends AbstractTestRealmKeycloakTest {
 		if (credentialScopeName != null) {
 			oAuthClient.scope(credentialScopeName);
 		}
-		AuthorizationEndpointResponse authorizationEndpointResponse = oAuthClient.doLogin("john",
-				"password");
+		var authorizationEndpointResponse = oAuthClient.doLogin("john","password");
 		return oAuthClient.doAccessTokenRequest(authorizationEndpointResponse.getCode()).getAccessToken();
 	}
 

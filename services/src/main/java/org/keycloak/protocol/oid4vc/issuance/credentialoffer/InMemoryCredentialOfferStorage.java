@@ -15,8 +15,9 @@ class InMemoryCredentialOfferStorage implements CredentialOfferStorage {
     private final Set<OfferEntry> offerStorage = new HashSet<>();
 
     @Override
-    public synchronized void putOfferEntry(OfferEntry entry) {
+    public synchronized OfferEntry addOfferEntry(OfferEntry entry) {
         offerStorage.add(entry);
+        return entry;
     }
 
     @Override
