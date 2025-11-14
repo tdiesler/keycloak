@@ -429,18 +429,22 @@ public abstract class OID4VCTest extends AbstractTestRealmKeycloakTest {
 		return getBearerToken(oAuthClient, client, null);
 	}
 
-	protected String getBearerToken(OAuthClient oAuthClient, ClientRepresentation client, String credentialScopeName) {
-		if (client != null) {
-			oAuthClient.client(client.getClientId(), client.getSecret());
-		}
-		if (credentialScopeName != null) {
-			oAuthClient.scope(credentialScopeName);
-		}
-		var authorizationEndpointResponse = oAuthClient.doLogin("john","password");
-		return oAuthClient.doAccessTokenRequest(authorizationEndpointResponse.getCode()).getAccessToken();
+	protected String getBearerToken(OAuthClient oAuthClient, ClientRepresentation client, String scope) {
+        return getBearerToken(oAuthClient, client, "john", scope);
 	}
 
-	public static class StaticTimeProvider implements TimeProvider {
+    protected String getBearerToken(OAuthClient oAuthClient, ClientRepresentation client, String username, String scope) {
+        if (client != null) {
+            oAuthClient.client(client.getClientId(), client.getSecret());
+        }
+        if (scope != null) {
+            oAuthClient.scope(scope);
+        }
+        var authorizationEndpointResponse = oAuthClient.doLogin(username,"password");
+        return oAuthClient.doAccessTokenRequest(authorizationEndpointResponse.getCode()).getAccessToken();
+    }
+
+    public static class StaticTimeProvider implements TimeProvider {
 		private final int currentTimeInS;
 
 		public StaticTimeProvider(int currentTimeInS) {

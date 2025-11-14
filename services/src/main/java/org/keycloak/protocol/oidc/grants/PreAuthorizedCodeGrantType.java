@@ -26,6 +26,7 @@ import org.keycloak.events.Details;
 import org.keycloak.events.Errors;
 import org.keycloak.events.EventType;
 import org.keycloak.models.AuthenticatedClientSessionModel;
+import org.keycloak.models.ClientModel;
 import org.keycloak.models.ClientSessionContext;
 import org.keycloak.models.Constants;
 import org.keycloak.models.KeycloakSession;
@@ -90,7 +91,7 @@ public class PreAuthorizedCodeGrantType extends OAuth2GrantTypeBase {
                     "Code is expired", Response.Status.BAD_REQUEST);
         }
 
-        var targetUser = offerEntry.getSubjectId();
+        var targetUser = offerEntry.getTargetUser();
         var userModel = session.users().getUserByUsername(realm, targetUser);
         if (userModel == null ) {
             var errorMessage = "No user model for: " + targetUser;
@@ -100,10 +101,10 @@ public class PreAuthorizedCodeGrantType extends OAuth2GrantTypeBase {
                     errorMessage, Response.Status.BAD_REQUEST);
         }
 
-        var clientId = offerEntry.getClientId();
-        var clientModel = realm.getClientByClientId(clientId);
+        var targetClient = offerEntry.getTargetClient();
+        ClientModel clientModel = realm.getClientByClientId(targetClient);
         if (clientModel == null ) {
-            var errorMessage = "No client model for: " + clientId;
+            var errorMessage = "No client model for: " + targetClient;
             event.detail(Details.REASON, errorMessage);
             event.error(Errors.INVALID_CODE);
             throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_REQUEST,
@@ -204,7 +205,10 @@ public class PreAuthorizedCodeGrantType extends OAuth2GrantTypeBase {
     public static String getPreAuthorizedCode(String targetClient, String targetUser, int expirationTime) {
         String codeId = SecretGenerator.getInstance().randomString();
         String nonce = SecretGenerator.getInstance().randomString();
-        String userSessionId = targetClient + "." + targetUser;
+        String userSessionId = targetUser;
+        if (targetClient != null) {
+            userSessionId += "." + targetClient;
+        }
         OAuth2Code oauth2Code = new OAuth2Code(codeId, expirationTime, nonce, CREDENTIAL_OFFER_URI_CODE_SCOPE, userSessionId);
         return oauth2Code.getId() + "." + oauth2Code.getNonce();
     }

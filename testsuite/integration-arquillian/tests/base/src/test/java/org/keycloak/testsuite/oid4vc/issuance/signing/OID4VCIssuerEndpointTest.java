@@ -69,6 +69,7 @@ import org.keycloak.protocol.oid4vc.model.DisplayObject;
 import org.keycloak.protocol.oid4vc.model.Format;
 import org.keycloak.protocol.oid4vc.model.SupportedCredentialConfiguration;
 import org.keycloak.protocol.oid4vc.model.VerifiableCredential;
+import org.keycloak.protocol.oidc.representations.OIDCConfigurationRepresentation;
 import org.keycloak.protocol.oidc.utils.OAuth2Code;
 import org.keycloak.protocol.oidc.utils.OAuth2CodeParser;
 import org.keycloak.protocol.oidc.utils.OAuth2CodeParser.OAuth2CodeEntry;
@@ -221,6 +222,7 @@ public abstract class OID4VCIssuerEndpointTest extends OID4VCTest {
                 null);
 
         // Assign the registered optional client scopes to the client
+        assignOptionalClientScopeToClient(sdJwtTypeNaturalPersonClientScope.getId(), client.getClientId());
         assignOptionalClientScopeToClient(sdJwtTypeCredentialClientScope.getId(), client.getClientId());
         assignOptionalClientScopeToClient(jwtTypeCredentialClientScope.getId(), client.getClientId());
         assignOptionalClientScopeToClient(minimalJwtTypeCredentialClientScope.getId(), client.getClientId());
@@ -521,6 +523,29 @@ public abstract class OID4VCIssuerEndpointTest extends OID4VCTest {
         return suiteContext.getAuthServerInfo().getContextRoot() + "/auth/.well-known/openid-credential-issuer/realms/" + realm;
     }
 
+    protected String getCredentialOfferUriUrl(String ctype) {
+        return getCredentialOfferUriUrl(ctype, false, null);
+    }
+
+    protected String getCredentialOfferUriUrl(String ctype, boolean preAuthorized, String targetUser) {
+        return getCredentialOfferUriUrl(ctype, preAuthorized, targetUser, null);
+    }
+
+    protected String getCredentialOfferUriUrl(String ctype, boolean preAuthorized, String targetUser, String targetClient) {
+        String res = getBasePath("test") + "credential-offer-uri?" +
+                "credential_configuration_id=" + ctype +
+                "&pre_authorized=" + preAuthorized;
+        if (targetUser != null)
+            res += "&target_user=" + targetUser;
+        if (targetClient != null)
+            res += "&target_client=" + targetClient;
+        return res;
+    }
+
+    protected String getCredentialOfferUrl(String nonce) {
+        return getBasePath("test") + "credential-offer/" + nonce;
+    }
+
     protected void requestCredential(String token,
                                      String credentialEndpoint,
                                      SupportedCredentialConfiguration offeredCredential,
@@ -557,6 +582,24 @@ public abstract class OID4VCIssuerEndpointTest extends OID4VCTest {
         } catch (Exception ex) {
             throw new RuntimeException(ex);
         }
+    }
+
+    public OIDCConfigurationRepresentation getAuthorizationMetadata(String authServerUrl) {
+        HttpGet getOpenidConfiguration = new HttpGet(authServerUrl + "/.well-known/openid-configuration");
+        try (CloseableHttpResponse response = httpClient.execute(getOpenidConfiguration)) {
+            assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+            String s = IOUtils.toString(response.getEntity().getContent(), StandardCharsets.UTF_8);
+            return JsonSerialization.readValue(s, OIDCConfigurationRepresentation.class);
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    public SupportedCredentialConfiguration getSupportedCredentialConfigurationByScope(CredentialIssuer metadata, String scope) {
+        var result = metadata.getCredentialsSupported().values().stream()
+                .filter(it -> it.getScope().equals(scope))
+                .findFirst().orElse(null);
+        return result;
     }
 
     @Override

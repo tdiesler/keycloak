@@ -102,7 +102,6 @@ import org.keycloak.protocol.oid4vc.utils.ClaimsPathPointer;
 import org.keycloak.protocol.oidc.grants.PreAuthorizedCodeGrantType;
 import org.keycloak.protocol.oidc.grants.PreAuthorizedCodeGrantTypeFactory;
 import org.keycloak.protocol.oidc.utils.OAuth2Code;
-import org.keycloak.protocol.oidc.utils.OAuth2CodeParser;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.dpop.DPoP;
 import org.keycloak.saml.processing.api.util.DeflateUtil;
@@ -327,14 +326,31 @@ public class OID4VCIssuerEndpoint {
     }
 
     /**
-     * Creates a Credential Offer Uri that can be pre-authorized and hence bound to a specific user id.
+     * Creates a Credential Offer Uri that can be pre-authorized and hence bound to a specific client/user id.
      * <p>
-     * This endpoint can only be invoked by a service account i.e. a registered user cannot ask the issuer
-     * to create a credential offer for himself or any other user.
+     * Credential Offer Validity Matrix
+     * <p>
+     * +----------+-----------+---------+---------+-----------------------------------------------------+
+     * | pre-auth | clientId  | userId  | Valid   | Notes                                               |
+     * +----------+-----------+---------+---------+-----------------------------------------------------+
+     * | no       | no        | no      | yes     | Generic offer; any logged-in user may redeem.       |
+     * | no       | no        | yes     | yes     | Offer restricted to a specific user.                |
+     * | no       | yes       | no      | yes     | Bound to client; user determined at login.          |
+     * | no       | yes       | yes     | yes     | Bound to both client and user.                      |
+     * +----------+-----------+---------+---------+-----------------------------------------------------+
+     * | yes      | no        | no      | no      | Pre-auth requires a user subject; missing userId.   |
+     * | yes      | yes       | no      | no      | Same as above; userId required.                     |
+     * | yes      | no        | yes     | yes     | Pre-auth for a specific user; client unconstrained. |
+     * | yes      | yes       | yes     | yes     | Fully constrained: user + client.                   |
+     * +----------+-----------+---------+---------+-----------------------------------------------------+
+     * <p>
+     * [TODO] This endpoint can only be invoked by a user with a dedicated role (e.g. oid4vci:issuer:credential-offer:create)
+     * [TODO] Otherwise any user could ask the issuer to create a credential offer herself or anybody else.
      *
      * @param vcId          A valid credential configuration id
      * @param preAuthorized A flag whether the offer should be pre-authorized (requires targetUser)
-     * @param targetUser    The target username that the offer is pre-authorized for
+     * @param targetClient  The target client id that the offer is authorized for
+     * @param targetUser    The target username that the offer is authorized for
      * @param type          The response type, which can be 'uri' or 'qr-code'
      * @param width         The width of the QR code image
      * @param height        The height of the QR code image
@@ -356,19 +372,18 @@ public class OID4VCIssuerEndpoint {
 
         AuthenticatedClientSessionModel clientSession = getAuthenticatedClientSession();
         ClientModel clientModel = clientSession.getClient();
-        String clientId = clientModel.getClientId();
 
         cors.allowedOrigins(session, clientModel);
         checkClientEnabled();
 
         if (targetClient == null) {
-            targetClient = clientId;
-            LOGGER.warnf("Using derived credential offer target client: %s", targetClient);
+            targetClient = clientModel.getClientId();
+            LOGGER.warnf("Using fallback client id for credential offer: %s", targetClient);
         }
         if (targetUser == null) {
             UserSessionModel userSession = clientSession.getUserSession();
             targetUser = userSession.getUser().getUsername();
-            LOGGER.warnf("Using derived credential offer target user: %s", targetUser);
+            LOGGER.warnf("Using fallback user id for credential offer: %s", targetUser);
         }
 
         Map<String, SupportedCredentialConfiguration> credentialsMap = OID4VCIssuerWellKnownProvider.getSupportedCredentials(session);
@@ -402,7 +417,7 @@ public class OID4VCIssuerEndpoint {
         var offerStorage = session.getProvider(CredentialOfferStorage.class);
         var offerEntry = offerStorage.addOfferEntry(new CredentialOfferStorage.OfferEntry(nonce, oauth2Code, credOffer));
         LOGGER.debugf("Stored credential offer entry: [type=%s, cid=%s, sub=%s, nonce=%s]",
-                offerEntry.offer().getCredentialConfigurationIds(), offerEntry.getClientId(), offerEntry.getSubjectId(), nonce);
+                offerEntry.offer().getCredentialConfigurationIds(), offerEntry.getTargetClient(), offerEntry.getTargetUser(), nonce);
 
         // Store the credential configuration IDs in a predictable location for token processing
         // This allows the authorization details processor to easily retrieve the configuration IDs
@@ -489,7 +504,7 @@ public class OID4VCIssuerEndpoint {
             throw new BadRequestException(getErrorResponse(ErrorType.INVALID_TOKEN));
         }
         LOGGER.debugf("Found credential offer entry: [type=%s, cid=%s, sub=%s, nonce=%s]",
-                offerEntry.offer().getCredentialConfigurationIds(), offerEntry.getClientId(), offerEntry.getSubjectId(), nonce);
+                offerEntry.offer().getCredentialConfigurationIds(), offerEntry.getTargetClient(), offerEntry.getTargetUser(), nonce);
 
         var oauth2Code = offerEntry.code();
         if (oauth2Code.isExpired()) {
@@ -1223,17 +1238,13 @@ public class OID4VCIssuerEndpoint {
         return new CredentialScopeModel(clientScopeModel);
     }
 
-    private OAuth2Code generateCodeForSession(int expiration, AuthenticatedClientSessionModel clientSession) {
-        String codeId = SecretGenerator.getInstance().randomString();
-        String nonce = SecretGenerator.getInstance().randomString();
-        String userSessionId = clientSession.getUserSession().getId();
-        return new OAuth2Code(codeId, expiration, nonce, CREDENTIAL_OFFER_URI_CODE_SCOPE, userSessionId);
-    }
-
     private OAuth2Code generateCodeForTargetUser(String targetClient, String targetUser, int expiration) {
         String codeId = SecretGenerator.getInstance().randomString();
         String nonce = SecretGenerator.getInstance().randomString();
-        String userSessionId = targetClient + "." + targetUser;
+        String userSessionId = targetUser;
+        if (targetClient != null) {
+            userSessionId += "." + targetClient;
+        }
         return new OAuth2Code(codeId, expiration, nonce, CREDENTIAL_OFFER_URI_CODE_SCOPE, userSessionId);
     }
 

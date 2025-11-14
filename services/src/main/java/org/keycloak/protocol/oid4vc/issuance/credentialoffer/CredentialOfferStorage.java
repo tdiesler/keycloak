@@ -16,14 +16,14 @@ public interface CredentialOfferStorage extends Provider {
                     .map(PreAuthorizedGrant::getPreAuthorizedCode)
                     .map(PreAuthorizedCode::getPreAuthorizedCode);
         }
-        public String getClientId() {
-            var clientUserIdPair = code.getUserSessionId();
-            var toks = clientUserIdPair.split("\\.");
+        public String getTargetUser() {
+            var pair = code.getUserSessionId();
+            var toks = pair.split("\\.");
             return toks.length > 0 ? toks[0] : null;
         }
-        public String getSubjectId() {
-            var clientUserIdPair = code.getUserSessionId();
-            var toks = clientUserIdPair.split("\\.");
+        public String getTargetClient() {
+            var pair = code.getUserSessionId();
+            var toks = pair.split("\\.");
             return toks.length > 1 ? toks[1] : null;
         }
     }
