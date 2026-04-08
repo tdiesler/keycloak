@@ -426,7 +426,7 @@ public class OID4VCBasicWallet {
      */
     public class AuthorizationEndpointRequest {
 
-        protected final LoginUrlBuilder loginForm;
+        private final LoginUrlBuilder loginForm;
 
         public AuthorizationEndpointRequest() {
             this.loginForm = oauth.loginForm();
@@ -464,11 +464,7 @@ public class OID4VCBasicWallet {
         }
 
         public AuthorizationEndpointResponse send(String username, String password) {
-            // [TODO #47649] OAuthClient cannot handle invalid authorization requests
-            // https://github.com/keycloak/keycloak/issues/47649
-            openLoginForm();
-            oauth.fillLoginForm(username, password);
-            return oauth.parseLoginResponse();
+            return loginForm.doLogin(username, password);
         }
     }
 }

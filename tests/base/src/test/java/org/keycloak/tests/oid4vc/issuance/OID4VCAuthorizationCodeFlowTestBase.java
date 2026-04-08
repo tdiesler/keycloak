@@ -38,7 +38,6 @@ import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.openqa.selenium.NoSuchElementException;
 
 import static org.keycloak.OID4VCConstants.OPENID_CREDENTIAL;
 
@@ -565,11 +564,10 @@ public abstract class OID4VCAuthorizationCodeFlowTestBase extends OID4VCIssuerTe
         CredentialIssuer issuer = wallet.getIssuerMetadata(ctx);
 
         OID4VCAuthorizationDetail authDetail = createAuthorizationDetail(issuer, "unknown-credential-config-id");
-        NoSuchElementException ex = assertThrows(NoSuchElementException.class, () -> performAuthorizationCodeLoginWithAuthorizationDetails(authDetail));
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> performAuthorizationCodeLoginWithAuthorizationDetails(authDetail));
 
-        // [TODO #47649] OAuthClient cannot handle invalid authorization requests
         assertNotNull(ex.getMessage(), "No error message");
-        assertTrue(ex.getMessage().contains("Unable to locate element with ID: 'username'"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("Invalid authorization_details: Invalid credential configuration"), ex.getMessage());
     }
 
     /** Token exchange without redirect_uri must fail. */
@@ -689,14 +687,14 @@ public abstract class OID4VCAuthorizationCodeFlowTestBase extends OID4VCIssuerTe
     @Test
     public void testTokenExchangeWithMalformedAuthorizationDetails() {
 
-        NoSuchElementException ex = assertThrows(NoSuchElementException.class, () -> oauth.loginForm()
+        AuthorizationEndpointResponse authResponse = oauth.loginForm()
                 .scope(ctx.getScope())
                 .param(OAuth2Constants.AUTHORIZATION_DETAILS, "invalid-json")
-                .doLogin(TEST_USER, TEST_PASSWORD));
+                .doLogin(TEST_USER, TEST_PASSWORD);
 
-        // [TODO #47649] OAuthClient cannot handle invalid authorization requests
-        assertNotNull(ex.getMessage(), "No error message");
-        assertTrue(ex.getMessage().contains("Unable to locate element with ID: 'username'"), ex.getMessage());
+        String errorDescription = authResponse.getErrorDescription();
+        assertNotNull(errorDescription, "No error description");
+        assertTrue(errorDescription.contains("Invalid authorization_details: invalid-json"), errorDescription);
     }
 
     /**
@@ -944,6 +942,8 @@ public abstract class OID4VCAuthorizationCodeFlowTestBase extends OID4VCIssuerTe
                 .scope(ctx.getScope())
                 .authorizationDetails(authDetail)
                 .send(TEST_USER, TEST_PASSWORD);
+        if (authResponse.getErrorDescription() != null)
+            throw new IllegalStateException(authResponse.getErrorDescription());
         String code = authResponse.getCode();
         assertNotNull(code, "Authorization code should not be null");
         return code;

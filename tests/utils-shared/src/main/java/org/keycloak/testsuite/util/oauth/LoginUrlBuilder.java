@@ -130,9 +130,27 @@ public class LoginUrlBuilder extends AbstractUrlBuilder {
         }
     }
 
+    /**
+     * Composite login method for the Authorization Code Flow
+     *
+     * <ol>
+     *  <li>It builds and opens the authorization request url</li>
+     *  <li>Fills the login form with user credentials (i.e. username, password)</li>
+     *  <li>Parses the authorization response</li>
+     * </ol>
+     *
+     * Step two is conditioned on successful processing of step one (i.e. the login page is displayed).
+     * In case of error, step two is skipped and the authorization response is parsed directly. It then
+     * contains the root cause of the authorization request error.
+     *
+     * @return An AuthorizationEndpointResponse
+     */
     public AuthorizationEndpointResponse doLogin(String username, String password) {
         open();
-        client.fillLoginForm(username, password);
+        String currUrl = client.driver.getCurrentUrl();
+        if (currUrl != null && !currUrl.contains("error=") && !currUrl.contains("error_description=")) {
+            client.fillLoginForm(username, password);
+        }
         return client.parseLoginResponse();
     }
 

@@ -20,7 +20,6 @@ import org.keycloak.util.Strings;
 
 import org.apache.http.HttpStatus;
 import org.junit.jupiter.api.Test;
-import org.openqa.selenium.NoSuchElementException;
 
 import static org.keycloak.OID4VCConstants.OPENID_CREDENTIAL;
 import static org.keycloak.models.oid4vci.CredentialScopeModel.VC_IDENTIFIER;
@@ -109,14 +108,9 @@ public abstract class OID4VCAuthorizationDetailsFlowTestBase extends OID4VCIssue
 
         ctx.putAttachment(ON_AUTH_REQUEST_ATTACHMENT_KEY, true);
 
-        // [TODO #47649] OAuthClient cannot handle invalid authorization requests
-        // https://github.com/keycloak/keycloak/issues/47649
-        assertThrows(NoSuchElementException.class, () ->
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () ->
                 runAuthorizationDetailsTest(ctx, credIdentifier, () -> authDetail, null, null, null));
-
-//        IllegalStateException ex = assertThrows(IllegalStateException.class, () ->
-//                runAuthorizationDetailsTest(ctx, credIdentifier, () -> authDetail, null, null, null));
-//        assertTrue(ex.getMessage().contains("Found invalid credential_identifiers in authorization_details"), "Unexpected - " + ex.getMessage());
+        assertTrue(ex.getMessage().contains("Invalid authorization_details: credential_identifiers not allowed"), ex.getMessage());
     }
 
     @Test

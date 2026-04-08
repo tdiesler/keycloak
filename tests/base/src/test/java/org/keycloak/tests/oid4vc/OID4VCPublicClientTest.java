@@ -35,16 +35,12 @@ import org.keycloak.util.JsonSerialization;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.openqa.selenium.NoSuchElementException;
-import org.opentest4j.AssertionFailedError;
 
 import static org.keycloak.OID4VCConstants.OPENID_CREDENTIAL;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 /**
@@ -106,7 +102,7 @@ public class OID4VCPublicClientTest extends OID4VCIssuerTestBase {
     }
 
     @Test
-    public void testAuthorizationRequestSuccess() throws Exception {
+    public void testAuthorizationRequestSuccess() {
 
         var ctx = new OID4VCTestContext(pubClient, jwtTypeCredentialScope);
 
@@ -123,47 +119,20 @@ public class OID4VCPublicClientTest extends OID4VCIssuerTestBase {
     }
 
     @Test
-    public void testAuthorizationRequestNoPkce() throws Exception {
+    public void testAuthorizationRequestNoPkce() {
 
         var ctx = new OID4VCTestContext(pubClient, jwtTypeCredentialScope);
 
         // Send AuthorizationRequest without required PKCE
         //
-        NoSuchElementException ex = assertThrows(NoSuchElementException.class, () -> wallet
+        AuthorizationEndpointResponse authResponse = wallet
                 .authorizationRequest()
                 .scope(ctx.getScope())
-                .send(ctx.getHolder(), TEST_PASSWORD));
+                .send(ctx.getHolder(), TEST_PASSWORD);
 
-        assertNotNull(ex.getMessage(), "No error message");
-        assertTrue(ex.getMessage().contains("Unable to locate element with ID: 'username'"), ex.getMessage());
-
-        // [TODO #47649] OAuthClient cannot handle invalid authorization requests
-        // https://github.com/keycloak/keycloak/issues/47649
-        // assertEquals("invalid_request", authResponse.getError());
-        // assertEquals("Missing parameter: code_challenge_method", authResponse.getErrorDescription());
-    }
-
-    @Test
-    public void testAuthorizationRequestWrongPassword() throws Exception {
-
-        var ctx = new OID4VCTestContext(pubClient, jwtTypeCredentialScope);
-
-        // Send AuthorizationRequest with incorrect credentials
-        //
-        AssertionFailedError ex = assertThrows(AssertionFailedError.class, () -> wallet
-                .authorizationRequest()
-                .scope(ctx.getScope())
-                .codeChallenge(PkceGenerator.s256())
-                .send(ctx.getHolder(), "wrong_password"));
-
-        assertTrue(ex.getMessage().contains("Expected OAuth callback, but URL was"), ex.getMessage());
-        assertTrue(ex.getMessage().contains("after timeout"), ex.getMessage());
-
-        // [TODO #47649] OAuthClient cannot handle invalid authorization requests
-        // https://github.com/keycloak/keycloak/issues/47649
-        // assertEquals("unauthorized", authResponse.getError());
-        // assertNull(authResponse.getErrorDescription(), "Null error description");
-
+        assertNull(authResponse.getCode(), "Expected no auth code");
+        assertEquals("invalid_request", authResponse.getError());
+        assertEquals("Missing parameter: code_challenge_method", authResponse.getErrorDescription());
     }
 
     // Private ---------------------------------------------------------------------------------------------------------
