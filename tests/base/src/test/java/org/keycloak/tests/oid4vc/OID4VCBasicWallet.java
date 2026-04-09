@@ -459,12 +459,38 @@ public class OID4VCBasicWallet {
             return this;
         }
 
-        public void openLoginForm() {
+        public AuthorizationEndpointRequest openLoginForm() {
             loginForm.open();
+            return this;
         }
 
+        public AuthorizationEndpointRequest fillLoginForm(String username, String password) {
+            oauth.fillLoginForm(username, password);
+            return this;
+        }
+
+        /**
+         * Composite action, which opens login form, sending username/password and expect redirect to the client right after. For other scenarios
+         * (EG. not expecting username/password screen after login, bad password etc), use other methods like
+         * {@link #openLoginForm()}, {@link #fillLoginForm(String, String)} or {@link #expectRedirectToClient()} individually
+         *
+         * @param username Existing username expected
+         * @param password Correct password for the user expected
+         * @return AuthorizationEndpointResponse
+         */
         public AuthorizationEndpointResponse send(String username, String password) {
-            return loginForm.doLogin(username, password);
+            openLoginForm();
+            fillLoginForm(username, password);
+            return expectRedirectToClient();
+        }
+
+        /**
+         * This method is useful in tests, which expect redirect back to the client right after login form is shown
+         *
+         * @return authorization endpoint response
+         */
+        public AuthorizationEndpointResponse expectRedirectToClient() {
+            return oauth.parseLoginResponse();
         }
     }
 }

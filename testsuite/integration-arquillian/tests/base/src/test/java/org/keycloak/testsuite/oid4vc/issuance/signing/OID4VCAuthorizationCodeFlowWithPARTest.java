@@ -232,8 +232,8 @@ public class OID4VCAuthorizationCodeFlowWithPARTest extends OID4VCIssuerEndpoint
         // Step 2: Perform authorization with PAR
         oauth.client(clientId);
         oauth.scope(getCredentialClientScope().getName());
-        AuthorizationEndpointResponse authResponse = oauth.loginForm().requestUri(requestUri)
-                .doLogin("john", "password");
+        oauth.loginForm().requestUri(requestUri).open();
+        AuthorizationEndpointResponse authResponse = oauth.parseLoginResponse();
 
         // Should fail because authorization_details from PAR request cannot be processed
         String errorDescription = authResponse.getErrorDescription();

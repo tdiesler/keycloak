@@ -128,11 +128,31 @@ public class OID4VCPublicClientTest extends OID4VCIssuerTestBase {
         AuthorizationEndpointResponse authResponse = wallet
                 .authorizationRequest()
                 .scope(ctx.getScope())
-                .send(ctx.getHolder(), TEST_PASSWORD);
+                .openLoginForm()
+                .expectRedirectToClient();
 
         assertNull(authResponse.getCode(), "Expected no auth code");
         assertEquals("invalid_request", authResponse.getError());
         assertEquals("Missing parameter: code_challenge_method", authResponse.getErrorDescription());
+    }
+
+
+    @Test
+    public void testAuthorizationRequestWrongPassword() {
+
+        var ctx = new OID4VCTestContext(pubClient, jwtTypeCredentialScope);
+
+        // Send AuthorizationRequest with incorrect credentials
+        //
+        wallet
+                .authorizationRequest()
+                .scope(ctx.getScope())
+                .codeChallenge(PkceGenerator.s256())
+                .openLoginForm()
+                .fillLoginForm(ctx.getHolder(), "wrong_password");
+
+        loginPage.assertCurrent();
+        assertEquals("Invalid username or password.", loginPage.getUsernameInputError());
     }
 
     // Private ---------------------------------------------------------------------------------------------------------

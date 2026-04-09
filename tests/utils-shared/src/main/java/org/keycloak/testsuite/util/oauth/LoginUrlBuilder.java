@@ -136,21 +136,24 @@ public class LoginUrlBuilder extends AbstractUrlBuilder {
      * <ol>
      *  <li>It builds and opens the authorization request url</li>
      *  <li>Fills the login form with user credentials (i.e. username, password)</li>
-     *  <li>Parses the authorization response</li>
+     *  <li>Being redirected back to the client authentication (OIDC authentication response). It parses the authorization response</li>
      * </ol>
      *
-     * Step two is conditioned on successful processing of step one (i.e. the login page is displayed).
-     * In case of error, step two is skipped and the authorization response is parsed directly. It then
-     * contains the root cause of the authorization request error.
+     * This method is intended to be used only for the purpose of basic login flow when user is supposed to open login form, fill username/password and
+     * being redirected back to the client right after. For any more complex scenarios like for example:
+     * <ul>
+     *     <li>SSO login (user being automatically authenticated once login form being opened and redirected back to the client without a need to fill username/password)</li>
+     *     <li>Automatic redirect to the client with the error once login form is being opened</li>
+     *     <li>User not being redirected back to the client after fill username/password (either due incorrect username/password or some additional Keycloak screen being displayed)</li>
+     * </ul>
+     * please use individual methods like {@link #open()}, {@link AbstractOAuthClient#fillLoginForm(String, String)} or {@link AbstractOAuthClient#parseLoginResponse()}
+     * together with other methods according to your preference.
      *
      * @return An AuthorizationEndpointResponse
      */
     public AuthorizationEndpointResponse doLogin(String username, String password) {
         open();
-        String currUrl = client.driver.getCurrentUrl();
-        if (currUrl != null && !currUrl.contains("error=") && !currUrl.contains("error_description=")) {
-            client.fillLoginForm(username, password);
-        }
+        client.fillLoginForm(username, password);
         return client.parseLoginResponse();
     }
 

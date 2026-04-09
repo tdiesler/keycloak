@@ -109,7 +109,9 @@ public abstract class OID4VCAuthorizationDetailsFlowTestBase extends OID4VCIssue
         ctx.putAttachment(ON_AUTH_REQUEST_ATTACHMENT_KEY, true);
 
         IllegalStateException ex = assertThrows(IllegalStateException.class, () ->
-                runAuthorizationDetailsTest(ctx, credIdentifier, () -> authDetail, null, null, null));
+                runAuthorizationDetailsTest(ctx, credIdentifier, () -> authDetail, null, null,
+                        (authRequest -> authRequest.openLoginForm().expectRedirectToClient()),
+                        null));
         assertTrue(ex.getMessage().contains("Invalid authorization_details: credential_identifiers not allowed"), ex.getMessage());
     }
 
@@ -119,7 +121,7 @@ public abstract class OID4VCAuthorizationDetailsFlowTestBase extends OID4VCIssue
         var ctx = new OID4VCTestContext(client, getCredentialScope());
         var credIdentifier = ctx.getCredentialScope().getCredentialIdentifier();
 
-        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> runAuthorizationDetailsTest(ctx, credIdentifier, null, null, null,
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> runAuthorizationDetailsTest(ctx, credIdentifier, null, null, null, null,
                 () -> new CredentialRequest().setCredentialConfigurationId(ctx.getCredentialConfigurationId())));
         assertTrue(ex.getMessage().contains("Credential must be requested by credential identifier from authorization_details"), ex.getMessage());
     }
@@ -131,7 +133,7 @@ public abstract class OID4VCAuthorizationDetailsFlowTestBase extends OID4VCIssue
         ctx.putAttachment(ON_AUTH_REQUEST_ATTACHMENT_KEY, onAuthRequest);
         ctx.putAttachment(ON_TOKEN_REQUEST_ATTACHMENT_KEY, onTokenRequest);
 
-        runAuthorizationDetailsTest(ctx, credIdentifier, null, null, null, null);
+        runAuthorizationDetailsTest(ctx, credIdentifier, null, null, null, null, null);
     }
 
     private void runAuthorizationDetailsTest(
@@ -140,6 +142,7 @@ public abstract class OID4VCAuthorizationDetailsFlowTestBase extends OID4VCIssue
             Supplier<OID4VCAuthorizationDetail> authDetailSupplier,
             Supplier<AuthorizationEndpointRequest> authRequestSupplier,
             Function<String, AccessTokenRequest> tokenRequestSupplier,
+            Function<AuthorizationEndpointRequest, AuthorizationEndpointResponse> authzResponseSupplier,
             Supplier<CredentialRequest> credentialRequestSupplier) {
 
         String credConfigId = ctx.getCredentialConfigurationId();
@@ -191,8 +194,10 @@ public abstract class OID4VCAuthorizationDetailsFlowTestBase extends OID4VCIssue
         }
 
         try {
-            AuthorizationEndpointResponse authResponse = authRequestSupplier.get()
-                    .send(ctx.getHolder(), TEST_PASSWORD);
+            if (authzResponseSupplier == null) {
+                authzResponseSupplier = (authRequest) -> authRequest.send(ctx.getHolder(), TEST_PASSWORD);
+            }
+            AuthorizationEndpointResponse authResponse = authzResponseSupplier.apply(authRequestSupplier.get());
 
             if (authResponse.getError() != null)
                 throw new IllegalStateException(authResponse.getErrorDescription());

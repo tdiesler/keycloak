@@ -45,7 +45,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -564,10 +563,14 @@ public abstract class OID4VCAuthorizationCodeFlowTestBase extends OID4VCIssuerTe
         CredentialIssuer issuer = wallet.getIssuerMetadata(ctx);
 
         OID4VCAuthorizationDetail authDetail = createAuthorizationDetail(issuer, "unknown-credential-config-id");
-        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> performAuthorizationCodeLoginWithAuthorizationDetails(authDetail));
+        AuthorizationEndpointResponse authResponse = wallet.authorizationRequest()
+                .scope(ctx.getScope())
+                .authorizationDetails(authDetail)
+                .openLoginForm()
+                .expectRedirectToClient();
 
-        assertNotNull(ex.getMessage(), "No error message");
-        assertTrue(ex.getMessage().contains("Invalid authorization_details: Invalid credential configuration"), ex.getMessage());
+        assertEquals("invalid_request", authResponse.getError());
+        assertTrue(authResponse.getErrorDescription().contains("Invalid authorization_details: Invalid credential configuration"));
     }
 
     /** Token exchange without redirect_uri must fail. */
@@ -687,10 +690,11 @@ public abstract class OID4VCAuthorizationCodeFlowTestBase extends OID4VCIssuerTe
     @Test
     public void testTokenExchangeWithMalformedAuthorizationDetails() {
 
-        AuthorizationEndpointResponse authResponse = oauth.loginForm()
+       oauth.loginForm()
                 .scope(ctx.getScope())
                 .param(OAuth2Constants.AUTHORIZATION_DETAILS, "invalid-json")
-                .doLogin(TEST_USER, TEST_PASSWORD);
+                .open();
+        AuthorizationEndpointResponse authResponse = oauth.parseLoginResponse();
 
         String errorDescription = authResponse.getErrorDescription();
         assertNotNull(errorDescription, "No error description");
