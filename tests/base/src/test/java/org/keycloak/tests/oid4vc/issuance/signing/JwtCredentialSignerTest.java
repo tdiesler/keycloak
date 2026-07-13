@@ -54,7 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@KeycloakIntegrationTest(config = OID4VCIssuerTestBase.VCTestServerConfig.class)
+@KeycloakIntegrationTest(config = OID4VCIssuerTestBase.VCDefaultServerConfig.class)
 public class JwtCredentialSignerTest extends OID4VCTest {
 
     @InjectRunOnServer

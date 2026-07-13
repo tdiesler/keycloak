@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@KeycloakIntegrationTest(config = OID4VCIssuerTestBase.VCTestServerConfig.class)
+@KeycloakIntegrationTest(config = OID4VCIssuerTestBase.VCDefaultServerConfig.class)
 public class OID4VCRefreshTokenProviderEventTest extends OID4VCIssuerTestBase {
 
     @InjectUser(config = OID4VCActionTest.OID4VCTestUserConfig.class)

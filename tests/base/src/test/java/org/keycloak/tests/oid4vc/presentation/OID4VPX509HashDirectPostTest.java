@@ -37,6 +37,7 @@ import org.keycloak.testframework.annotations.TestSetup;
 import org.keycloak.tests.oid4vc.OID4VCTestContext;
 import org.keycloak.testsuite.util.oauth.oid4vc.Oid4vpDirectPostResponse;
 import org.keycloak.testsuite.util.oauth.oid4vc.Oid4vpRequestObjectResponse;
+import org.keycloak.tests.oid4vc.OID4VCIssuerTestBase;
 import org.keycloak.util.JsonSerialization;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -50,7 +51,7 @@ import static org.keycloak.models.oid4vci.CredentialScopeModel.VC_SIGNING_ALG;
  * client identifier, a signed request object fetched by {@code request_uri}, and an unencrypted
  * {@code direct_post} response, same device.
  */
-@KeycloakIntegrationTest(config = PresentationServerConfig.class)
+@KeycloakIntegrationTest(config = OID4VCIssuerTestBase.VCDefaultServerConfig.class)
 public class OID4VPX509HashDirectPostTest extends OID4VPVerifierTestBase {
 
     @Override
