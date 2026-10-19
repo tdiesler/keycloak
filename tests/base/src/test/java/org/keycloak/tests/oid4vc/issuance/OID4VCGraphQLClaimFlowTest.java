@@ -28,6 +28,7 @@ import jakarta.ws.rs.core.Response;
 import org.keycloak.VCFormat;
 import org.keycloak.protocol.oid4vc.model.CredentialResponse;
 import org.keycloak.protocol.oid4vc.model.CredentialScopeRepresentation;
+import org.keycloak.protocol.oid4vc.model.CredentialsOffer;
 import org.keycloak.protocol.oid4vc.model.ProofType;
 import org.keycloak.representations.idm.oid4vc.UserVerifiableCredentialRepresentation;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
@@ -59,7 +60,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * runs the full authorization code flow, and verifies the issued JWT credential
  * contains the claims returned by the mock GraphQL endpoint.
  */
-@KeycloakIntegrationTest(config = OID4VCIssuerTestBase.VCTestServerConfig.class)
+@KeycloakIntegrationTest(config = OID4VCIssuerTestBase.VCTestServerWithPreAuthCodeEnabled.class)
 public class OID4VCGraphQLClaimFlowTest extends OID4VCIssuerTestBase {
 
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -170,6 +171,54 @@ public class OID4VCGraphQLClaimFlowTest extends OID4VCIssuerTestBase {
         assertEquals("invalid_credential_request", credResponse.getError());
         assertTrue(credResponse.getErrorDescription().contains("Unsupported variable source"),
                 credResponse.getErrorDescription());
+    }
+
+    @Test
+    public void testOfferClaimsRefWithAuthCodeGrant() throws Exception {
+        String scopeName = "graphql-offer-authcode-scope";
+
+        OID4VCTestContext ctx = createScopeWithGraphQLMapper(scopeName, graphqlEndpoint, "id=offer:claimsRef");
+
+        requestCount.set(0);
+
+        CredentialsOffer offer = wallet.createCredentialOffer(ctx, request -> request
+                .preAuthorized(false)
+                .targetUser(ctx.getHolder())
+                .claimsRef("booking-42"));
+
+        Oid4vcCredentialResponse credResponse = wallet.fetchCredentialByOffer(ctx, offer);
+
+        assertTrue(requestCount.get() > 0, "Mock GraphQL server should have been called");
+
+        // Object responses are spread into individual top-level claims (claim.name "ticket" is unused for
+        // object responses) so each field gets its own independent SD-JWT disclosure.
+        JsonNode subject = decodeCredentialSubject(credResponse);
+        assertEquals("booking-42", subject.path("claimsRef").asText(),
+                "GraphQL variable 'id' should equal the claimsRef from the credential offer");
+        assertEquals("BA123", subject.path("flightNumber").asText());
+    }
+
+    @Test
+    public void testOfferClaimsRefWithPreAuthCodeGrant() throws Exception {
+        String scopeName = "graphql-offer-preauth-scope";
+
+        OID4VCTestContext ctx = createScopeWithGraphQLMapper(scopeName, graphqlEndpoint, "id=offer:claimsRef");
+
+        requestCount.set(0);
+
+        CredentialsOffer offer = wallet.createCredentialOffer(ctx, request -> request
+                .preAuthorized(true)
+                .targetUser(ctx.getHolder())
+                .claimsRef("booking-99"));
+
+        Oid4vcCredentialResponse credResponse = wallet.fetchCredentialByOffer(ctx, offer);
+
+        assertTrue(requestCount.get() > 0, "Mock GraphQL server should have been called");
+
+        JsonNode subject = decodeCredentialSubject(credResponse);
+        assertEquals("booking-99", subject.path("claimsRef").asText(),
+                "GraphQL variable 'id' should equal the claimsRef from the credential offer");
+        assertEquals("BA123", subject.path("flightNumber").asText());
     }
 
     // ---- Helpers ----

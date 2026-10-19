@@ -34,6 +34,7 @@ import org.keycloak.models.UserSessionModel;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.protocol.ProtocolMapper;
 import org.keycloak.protocol.ProtocolMapperConfigException;
+import org.keycloak.protocol.oid4vc.issuance.VCIssuanceContext;
 import org.keycloak.protocol.oid4vc.model.VerifiableCredential;
 import org.keycloak.provider.ProviderConfigProperty;
 
@@ -77,6 +78,7 @@ public class OID4VCGraphQLClaimMapper extends OID4VCMapper {
     public static final String MAPPER_UNSUPPORTED_VARIABLE_SOURCE_ERROR = "oid4vciGraphqlUnsupportedVariableSourceError";
     public static final String MAPPER_RESERVED_SPREAD_FIELD_ERROR = "oid4vciGraphqlReservedSpreadFieldError";
     public static final String MAPPER_UNRESOLVABLE_QUERY_ERROR = "oid4vciGraphqlUnresolvableQueryError";
+    public static final String MAPPER_UNSUPPORTED_OFFER_FIELD_ERROR = "oid4vciGraphqlUnsupportedOfferFieldError";
 
     private static final Logger LOG = Logger.getLogger(OID4VCGraphQLClaimMapper.class);
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -281,9 +283,18 @@ public class OID4VCGraphQLClaimMapper extends OID4VCMapper {
                 var parts = mapping.trim().split("=", 2);
                 if (parts.length != 2) continue;
                 var source = parts[1].trim();
-                if (!source.startsWith(SOURCE_PREFIX_USER)) {
+                if (source.startsWith(SOURCE_PREFIX_USER)) {
+                    continue;
+                } else if (source.startsWith(SOURCE_PREFIX_OFFER)) {
+                    var offerField = source.substring(SOURCE_PREFIX_OFFER.length());
+                    if (!"claimsRef".equals(offerField)) {
+                        throw new ProtocolMapperConfigException("Unsupported offer field: '" + offerField
+                                + "'. Only 'offer:claimsRef' is supported.", MAPPER_UNSUPPORTED_OFFER_FIELD_ERROR);
+                    }
+                } else {
                     throw new ProtocolMapperConfigException("Unsupported variable source: '" + source
-                            + "'. Expected prefix 'user:' (e.g. 'user:username')", MAPPER_UNSUPPORTED_VARIABLE_SOURCE_ERROR);
+                            + "'. Expected prefix 'user:' or 'offer:' (e.g. 'user:username', 'offer:claimsRef')",
+                            MAPPER_UNSUPPORTED_VARIABLE_SOURCE_ERROR);
                 }
             }
         }
@@ -295,6 +306,15 @@ public class OID4VCGraphQLClaimMapper extends OID4VCMapper {
 
     @Override
     public void setClaim(Map<String, Object> claims, UserSessionModel userSessionModel) {
+        doSetClaim(claims, userSessionModel, null);
+    }
+
+    @Override
+    public void setClaim(Map<String, Object> claims, UserSessionModel userSessionModel, VCIssuanceContext context) {
+        doSetClaim(claims, userSessionModel, context);
+    }
+
+    private void doSetClaim(Map<String, Object> claims, UserSessionModel userSessionModel, VCIssuanceContext context) {
         var config = mapperModel.getConfig();
         if (config == null) {
             config = Collections.emptyMap();
@@ -319,7 +339,7 @@ public class OID4VCGraphQLClaimMapper extends OID4VCMapper {
         }
 
         try {
-            var variables = resolveVariables(userSessionModel, variableMapping);
+            var variables = resolveVariables(userSessionModel, variableMapping, context);
             var responseData = executeQuery(endpoint, query, variables);
 
             var node = navigatePath(responseData, responsePath);
@@ -409,8 +429,10 @@ public class OID4VCGraphQLClaimMapper extends OID4VCMapper {
     }
 
     private static final String SOURCE_PREFIX_USER = "user:";
+    private static final String SOURCE_PREFIX_OFFER = "offer:";
 
-    private Map<String, Object> resolveVariables(UserSessionModel userSessionModel, String variableMapping) {
+    private Map<String, Object> resolveVariables(UserSessionModel userSessionModel, String variableMapping,
+                                                 VCIssuanceContext context) {
         if (variableMapping == null || variableMapping.isEmpty()) {
             return Collections.emptyMap();
         }
@@ -427,9 +449,20 @@ public class OID4VCGraphQLClaimMapper extends OID4VCMapper {
                 if (!values.isEmpty()) {
                     variables.put(varName, values.iterator().next());
                 }
+            } else if (source.startsWith(SOURCE_PREFIX_OFFER)) {
+                var offerField = source.substring(SOURCE_PREFIX_OFFER.length());
+                if (!"claimsRef".equals(offerField)) {
+                    throw new RuntimeException("Unsupported offer field: '" + offerField
+                            + "'. Only 'offer:claimsRef' is supported.");
+                }
+                if (context == null || context.getClaimsRef() == null) {
+                    throw new RuntimeException("Variable '" + varName + "' requires offer:claimsRef, "
+                            + "but no claims reference was provided in the credential offer.");
+                }
+                variables.put(varName, context.getClaimsRef());
             } else {
                 throw new RuntimeException("Unsupported variable source: '" + source
-                        + "'. Expected prefix 'user:' (e.g. 'user:username')");
+                        + "'. Expected prefix 'user:' or 'offer:' (e.g. 'user:username', 'offer:claimsRef')");
             }
         }
         return variables;

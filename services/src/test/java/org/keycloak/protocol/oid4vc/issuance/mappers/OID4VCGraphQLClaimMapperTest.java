@@ -26,6 +26,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.keycloak.connections.httpclient.HttpClientProvider;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.ProtocolMapperContainerModel;
@@ -37,6 +40,7 @@ import org.keycloak.models.oid4vci.CredentialScopeModel;
 import org.keycloak.models.oid4vci.Oid4vcProtocolMapperModel;
 import org.keycloak.protocol.ProtocolMapper;
 import org.keycloak.protocol.ProtocolMapperConfigException;
+import org.keycloak.protocol.oid4vc.issuance.VCIssuanceContext;
 import org.keycloak.protocol.oid4vc.model.Claim;
 
 import com.sun.net.httpserver.HttpServer;
@@ -66,13 +70,20 @@ public class OID4VCGraphQLClaimMapperTest {
             var body = new String(exchange.getRequestBody().readAllBytes());
             String response;
             if (body.contains("booking")) {
+                String claimsRef = "unknown";
+                JsonNode reqJson = new ObjectMapper().readTree(body);
+                JsonNode vars = reqJson.path("variables");
+                if (vars.has("id")) {
+                    claimsRef = vars.get("id").asText();
+                }
                 response = """
                     {"data":{"booking":{
+                        "claimsRef":"%s",
                         "flightNumber":"BA123",
                         "route":"LHR-JFK",
                         "departure":"2026-10-15T08:30:00Z",
                         "bookingRef":"XKCD42"
-                    }}}""";
+                    }}}""".formatted(claimsRef);
             } else if (body.contains("roles")) {
                 response = """
                     {"data":{"roles":["pilot","crew","admin"]}}""";
@@ -779,6 +790,83 @@ public class OID4VCGraphQLClaimMapperTest {
         var ex = assertThrows(ProtocolMapperConfigException.class,
                 () -> mapper.validateConfig(keycloakSession, realm, client, mapper.mapperModel));
         assertTrue(ex.getMessage().contains("Unsupported variable source"));
+    }
+
+    @Test
+    public void testValidateAcceptsOfferClaimsRefPrefix() throws ProtocolMapperConfigException {
+        var mapper = createMapper("ticket", endpoint,
+                "query($id: String!) { booking(claimsRef: $id) { flightNumber } }", "id=offer:claimsRef", "booking");
+        mapper.validate();
+    }
+
+    @Test
+    public void testValidateRejectsUnsupportedOfferField() {
+        var mapper = createMapper("ticket", endpoint,
+                "query($id: String!) { booking(claimsRef: $id) { flightNumber } }", "id=offer:someOtherField", "booking");
+        var ex = assertThrows(ProtocolMapperConfigException.class, mapper::validate);
+        assertTrue(ex.getMessage().contains("Unsupported offer field"));
+    }
+
+    // GraphQL object results are spread into individual top-level claims per #53956; claim.name ("ticket")
+    // is unused for object responses, so each field (including 'claimsRef', resolved via offer:claimsRef)
+    // gets its own independent SD-JWT disclosure.
+
+    @Test
+    public void testOfferClaimsRefVariable() {
+        var mapper = createMapper("ticket", endpoint,
+                "query($id: String!) { booking(claimsRef: $id) { claimsRef flightNumber } }",
+                "id=offer:claimsRef", "booking");
+
+        var session = stubUserSession("alice");
+        var context = new VCIssuanceContext().setClaimsRef("booking-42");
+
+        var claims = new HashMap<String, Object>();
+        mapper.setClaim(claims, session, context);
+
+        assertEquals("booking-42", claims.get("claimsRef"));
+        assertEquals("BA123", claims.get("flightNumber"));
+    }
+
+    @Test
+    public void testOfferClaimsRefMissingContext() {
+        var mapper = createMapper("ticket", endpoint,
+                "query($id: String!) { booking(claimsRef: $id) { flightNumber } }",
+                "id=offer:claimsRef", "booking");
+
+        var session = stubUserSession("alice");
+
+        var claims = new HashMap<String, Object>();
+        var ex = assertThrows(RuntimeException.class, () -> mapper.setClaim(claims, session));
+        assertTrue(ex.getMessage().contains("claims reference was provided"));
+    }
+
+    @Test
+    public void testUnsupportedOfferField() {
+        var mapper = createMapper("ticket", endpoint,
+                "query($id: String!) { booking(claimsRef: $id) { flightNumber } }",
+                "id=offer:someOtherField", "booking");
+
+        var session = stubUserSession("alice");
+        var context = new VCIssuanceContext().setClaimsRef("booking-42");
+
+        var claims = new HashMap<String, Object>();
+        var ex = assertThrows(RuntimeException.class, () -> mapper.setClaim(claims, session, context));
+        assertTrue(ex.getMessage().contains("Unsupported offer field"));
+    }
+
+    @Test
+    public void testMixedUserAndOfferVariables() {
+        var mapper = createMapper("ticket", endpoint,
+                "query($id: String!) { booking(claimsRef: $id) { claimsRef flightNumber } }",
+                "id=offer:claimsRef, user=user:username", "booking");
+
+        var session = stubUserSession("alice");
+        var context = new VCIssuanceContext().setClaimsRef("booking-42");
+
+        var claims = new HashMap<String, Object>();
+        mapper.setClaim(claims, session, context);
+
+        assertEquals("booking-42", claims.get("claimsRef"));
     }
 
     private static OID4VCGraphQLClaimMapper createMapper(String claimName, String endpoint,
